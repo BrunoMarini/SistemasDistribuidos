@@ -6,14 +6,21 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define DATA "Esta eh a mensagem que quero enviar"
 
+struct conexao {
+	int codigo;
+};
+
 struct mensagem {
-  int codigo;
-  char message[500];
-  char ip[50];
-  int porta;
+	int codigo;
+	char user[50];
+	char fileName[50];
+	char message[500];
 };
 
 //pthread_mutex_t lock; 
@@ -32,10 +39,12 @@ void atualizaDados();
 int main()
 {
 	int sock, op;
-	char nome[50];
+	char nome[50], folder[50], pid[6];
 	struct sockaddr_in nameServer, name;
 	struct hostent *hp, *gethostbyname();
   	struct mensagem msg;
+	struct conexao con;
+	struct stat st = {0};
 
   	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -56,6 +65,14 @@ int main()
 	nameServer.sin_family = AF_INET;
 	nameServer.sin_port = htons(2020);
 
+	/* Cria o folder onde os arquivos serão armazenados */
+	strcpy(folder, "user");
+	sprintf(pid, "%d", getpid());
+	strcat(folder, pid);
+	if (stat(folder, &st) == -1) {
+    	mkdir(folder, 0700);
+	}
+
 	int loop = 1;
 
 	/* 
@@ -64,12 +81,13 @@ int main()
 	 * a consistencia com o servidor.
      *
 	 * Antes de criar o filho trava o mutex para que o usuario só possa 
-	 * interagir após os dados serem atualziados com o servidor (primeira iteracao)
+	 * interagir após os dados serem atualziados com o servidor 
+	 * (primeira iteracao)
 	 */
 
 	/* Envia codiog 10 pedido dos dados */
-	msg.codigo = 10;
-	if (sendto (sock, (char *)&msg, sizeof (struct mensagem), 0, (struct sockaddr *) &nameServer, sizeof nameServer) < 0)
+	con.codigo = 10;
+	if (sendto (sock, (char *)&con, sizeof (struct conexao), 0, (struct sockaddr *) &nameServer, sizeof nameServer) < 0)
 		perror("[Client] Sending datagram message");
 	
 	int tam;
@@ -78,7 +96,7 @@ int main()
 		perror("[Client] 1 receiving datagram packet");
 	
 	if(msg.codigo == 0) {
-		printf("[Client] Nenhum dados salvo ainda");
+		printf("[Client] Nenhum dados salvo ainda\n");
 	} else {
 		printf("[Client] Temso %i arquivos criados", msg.codigo);
 		
@@ -116,8 +134,25 @@ int main()
 				break;
 
 			msg.codigo = op;
+			strcpy(msg.user, &name);
 
-			printf("[Client] Vou enviar em\n");
+			switch (op) {
+				case 1:
+					break;
+				case 2:
+					printf("Insira o nome do arquivo que deseja criar: ");
+					scanf("%s", msg.fileName);
+					break;
+				case 3:
+					break;
+				case 4:
+					break;
+				case 5:
+					break;
+				default:
+					continue;
+			}
+
 			/* Envia */
 			if (sendto (sock, (char *)&msg, sizeof (struct mensagem), 0, (struct sockaddr *) &nameServer, sizeof nameServer) < 0)
 				perror("[Client] Sending datagram message");

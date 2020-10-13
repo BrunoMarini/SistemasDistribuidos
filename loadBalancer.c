@@ -9,10 +9,7 @@
 #include <string.h>
 
 struct mensagemUsuario {
-  int codigo;
-  char message[500];
-  char ip[50]; //receber o ip do jeito pra ja atribuir
-  int porta;   
+  	int codigo;
 };
 
 struct mensagemServer {

@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/mman.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -9,10 +10,9 @@
 #include <string.h>
 
 struct mensagem {
-  int codigo;
-  char message[500];
-  char ip[50]; //receber o ip do jeito pra ja atribuir
-  int porta;   
+  	int codigo;
+	char subject[50];
+	char message[500];
 };
 
 struct mensagemServer {

@@ -9,9 +9,12 @@
 #include <strings.h>
 #include <string.h>
 
-#define CREATE_SUCCESS 0
+#define EDIT_FILE 2
 #define READ_FILES 1
+#define CREATE_SUCCESS 0
 #define ERROR_NAME_IN_USE -1
+#define FILE_NOT_FOUND -2
+#define ERROR_EMPTY_DATABASE -3
 
 struct mensagemUsuario {
 	int time;
@@ -37,6 +40,8 @@ int paiPid;
 
 int inserirNoFim(struct data **, char *);
 void retornaCriados(struct data **);
+struct mensagemUsuario encontrarArquivo(struct data *, char *);
+
 int sock;
 struct sockaddr_in cli_send;
 struct mensagemUsuario msg;
@@ -122,7 +127,8 @@ int main()
 			break;
 		/* EDITAR */
 		case 3:
-			printf("[Server] Editar arquivo\n");
+			printf("[Server] Editar arquivo (%s)\n", msg.subject);
+			msg = encontrarArquivo(raiz, msg.subject);
 			break;
 		/* EXCLUIR */
 		case 4:
@@ -133,6 +139,9 @@ int main()
 			printf("[Server] Ver arquivos\n");
 			retornaCriados(&raiz);
 			continue;
+		case 6:
+			printf("[Server] Arquivo editado\n");
+			//msg.codigo = atualizaArquivo(&raiz, msg.subject, msg.message);
 		default:
 			printf("[Server] Opcao nao encontrada\n");
 			break;
@@ -244,4 +253,25 @@ void retornaCriados(struct data **raiz){
 			perror("[Server] Sending datagram message");
 		aux = aux -> prox;
 	}
+}
+
+struct mensagemUsuario encontrarArquivo(struct data *raiz, char *subject){
+	struct mensagemUsuario msg;
+	msg.codigo = FILE_NOT_FOUND;
+	if(raiz == NULL){
+		msg.codigo = ERROR_EMPTY_DATABASE;
+	}else{
+		while(1){
+			if(strcmp(raiz->subject, subject) == 0){
+				strcpy(msg.subject, raiz->subject);
+				strcpy(msg.message, raiz->message);
+				msg.codigo = EDIT_FILE;
+				break;
+			}
+			if(raiz->prox == NULL)
+				break;
+			raiz = raiz->prox;
+		}
+	}
+	return msg;
 }

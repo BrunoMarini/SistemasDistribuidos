@@ -10,9 +10,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define CREATE_SUCCESS 0
+#define EDIT_FILE 2
 #define READ_FILES 1
+#define CREATE_SUCCESS 0
 #define ERROR_NAME_IN_USE -1
+#define FILE_NOT_FOUND -2
+#define ERROR_EMPTY_DATABASE -3
 
 struct conexao {
 	int codigo;
@@ -38,17 +41,18 @@ struct mensagem {
 //pkill s && pkill l && pkill c
 
 void atualizaDados();
+void editFile(struct mensagem);
 void printArquivos();
-void parseResponse(int);
+void parseResponse(struct mensagem);
 
 struct sockaddr_in name;
 int sock;
-char nome[50];
+char folder[50], nome[50];
 
 int main()
 {
 	int op;
-	char folder[50], pid[6];
+	char pid[6], aux[50];
 	struct sockaddr_in nameServer;
 	struct hostent *hp, *gethostbyname();
   	struct mensagem msg;
@@ -154,6 +158,9 @@ int main()
 					printf("Preparando arquivo %s \n", msg.subject);
 					break;
 				case 3:
+					printf("Insira o nome do arquivo que deseja editar: ");
+					scanf("%s", msg.subject);
+					printf("Preparando para pedir %s \n", msg.subject);
 					break;
 				case 4:
 					break;
@@ -178,17 +185,23 @@ int main()
 			if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
 				perror("[Client] receiving datagram packet");
 
-			parseResponse(msg.codigo);
+			parseResponse(msg);
 		}
 	//}
-
-  close(sock);
-  exit(0);
+	strcpy(aux, "rm -rf ");
+	strcat(aux, folder);
+	printf("[Client] Apagando pasta e terminando! Adeus\n");
+	system(aux);
+	close(sock);
+	exit(0);
 }
 
-void parseResponse(int codigo){
-	printf("[Client] Codigo recebido: %i\n", codigo);
-	switch(codigo){
+void parseResponse(struct mensagem msg){
+	printf("[Client] Codigo recebido: %i\n", msg.codigo);
+	switch(msg.codigo){
+		case ERROR_EMPTY_DATABASE:
+			printf("\nERRO! Não existe arquivos cadastrados!\n");
+			break;
 		case CREATE_SUCCESS:
 			printf("\nOperação realizada com sucesso!\n");
 			break;
@@ -197,6 +210,12 @@ void parseResponse(int codigo){
 			break;
 		case READ_FILES:
 			printArquivos();
+			break;
+		case FILE_NOT_FOUND:
+			printf("\nERRO! O nome que nao foi possivel encontrar o arquivo!\n");
+			break;
+		case EDIT_FILE:
+			editFile(msg);
 			break;
 	}
 }
@@ -217,6 +236,27 @@ void printArquivos(){
 
 		printf("%i. %s\n", i + 1, msg.subject);
 	}
+}
+
+void editFile(struct mensagem msg){
+	FILE *fp = NULL;
+	char path[70];
+	strcpy(path, folder);
+	strcat(path, "/");
+	strcat(path, msg.subject);
+	strcat(path, ".txt");
+	printf("[Client] File name: %s \n", path);
+	fp = fopen(path, "w");
+	fprintf(fp, "%s", msg.message);
+	fclose(fp);
+	
+	while ( getchar() != '\n' );
+
+	printf("\nArquivo %s encontrado!\n", msg.subject);
+	printf("\nAgora so editar la e me avisar quando terminar =)\n");
+	printf("Pressione qualquer tecla para continuar...");
+	getchar();
+	//FALTA ENVIAR O ATUALZIADO
 }
 
 void atualizaDados(){

@@ -9,11 +9,15 @@
 #include <string.h>
 
 struct mensagemUsuario {
-  	int codigo;
+	int time;
+	int codigo;
+	char user[50];
+	char fileName[50];
+	char message[500];
 };
 
 struct mensagemServer {
-	int codigo;
+	struct mensagemUsuario msg;
 	struct sockaddr_in client;
 };
 
@@ -85,6 +89,9 @@ int main()
 		/* Mandar codigo para matar o server tambem */
 		if(msg.codigo == 9){
 			printf("[LoadBalancer] Codigo para auto destruicao\n");
+			msgServer.msg = msg;
+			if (sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&server1, sizeof name) < 0)
+				perror("[LoadBalancer] Sending datagram message");
 			break;
 		}
 
@@ -104,7 +111,7 @@ int main()
 		//msg.porta = 67213/*name.sin_port*/;
 		//strcpy(msg.ip, inet_ntoa(name.sin_addr));
 		
-		msgServer.codigo = msg.codigo;
+		msgServer.msg = msg;
 		msgServer.client = cli_send;
 		
 		printf("[LoadBalancer] Encaminhando request para servidor\n");

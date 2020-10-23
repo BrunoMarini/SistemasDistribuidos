@@ -10,16 +10,19 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define DATA "Esta eh a mensagem que quero enviar"
+#define CREATE_SUCCESS 0
+#define READ_FILES 1
+#define ERROR_NAME_IN_USE -1
 
 struct conexao {
 	int codigo;
 };
 
 struct mensagem {
+	int time;
 	int codigo;
 	char user[50];
-	char fileName[50];
+	char subject[50];
 	char message[500];
 };
 
@@ -35,12 +38,18 @@ struct mensagem {
 //pkill s && pkill l && pkill c
 
 void atualizaDados();
+void printArquivos();
+void parseResponse(int);
+
+struct sockaddr_in name;
+int sock;
+char nome[50];
 
 int main()
 {
-	int sock, op;
-	char nome[50], folder[50], pid[6];
-	struct sockaddr_in nameServer, name;
+	int op;
+	char folder[50], pid[6];
+	struct sockaddr_in nameServer;
 	struct hostent *hp, *gethostbyname();
   	struct mensagem msg;
 	struct conexao con;
@@ -85,13 +94,13 @@ int main()
 	 * (primeira iteracao)
 	 */
 
-	/* Envia codiog 10 pedido dos dados */
+	/* Envia codiog 10 pedido dos dados 
 	con.codigo = 10;
 	if (sendto (sock, (char *)&con, sizeof (struct conexao), 0, (struct sockaddr *) &nameServer, sizeof nameServer) < 0)
 		perror("[Client] Sending datagram message");
 	
 	int tam;
-	/* Primeiro recebe a quantidade de arquivos */
+	/* Primeiro recebe a quantidade de arquivos 
 	if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
 		perror("[Client] 1 receiving datagram packet");
 	
@@ -101,20 +110,20 @@ int main()
 		printf("[Client] Temso %i arquivos criados", msg.codigo);
 		
 		for(int i = 0; i < msg.codigo; i++){
-			/* Primeiro recebe a quantidade de arquivos */
+			/* Primeiro recebe a quantidade de arquivos 
 			if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
 				perror("[Client] 2 receiving datagram packet");
 			
 		}
-	}
+	}*/
 
 	printf("Por favor insira seu nome: ");
 	scanf("%s", nome);
 
-	if(fork() == 0){
+	/*if(fork() == 0){
 		atualizaDados();
 		loop = 0;
-	} else {
+	} else {*/
 		while(loop)
 		{   
 			/* Pergunta pro usuario a opcao desejada */
@@ -134,14 +143,15 @@ int main()
 				break;
 
 			msg.codigo = op;
-			strcpy(msg.user, &name);
+			strcpy(msg.user, nome);
 
 			switch (op) {
 				case 1:
 					break;
 				case 2:
 					printf("Insira o nome do arquivo que deseja criar: ");
-					scanf("%s", msg.fileName);
+					scanf("%s", msg.subject);
+					printf("Preparando arquivo %s \n", msg.subject);
 					break;
 				case 3:
 					break;
@@ -149,6 +159,7 @@ int main()
 					break;
 				case 5:
 					break;
+				case 9: break;
 				default:
 					continue;
 			}
@@ -166,11 +177,46 @@ int main()
 			int resposta, tam;
 			if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
 				perror("[Client] receiving datagram packet");
+
+			parseResponse(msg.codigo);
 		}
-	}
+	//}
 
   close(sock);
   exit(0);
+}
+
+void parseResponse(int codigo){
+	printf("[Client] Codigo recebido: %i\n", codigo);
+	switch(codigo){
+		case CREATE_SUCCESS:
+			printf("\nOperação realizada com sucesso!\n");
+			break;
+		case ERROR_NAME_IN_USE:
+			printf("\nERRO! O nome já está em uso!\n");
+			break;
+		case READ_FILES:
+			printArquivos();
+			break;
+	}
+}
+
+void printArquivos(){
+	int resposta, tam;
+	struct mensagem msg;
+	if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
+		perror("[Client] receiving datagram packet");
+	resposta = msg.codigo;
+	if(resposta == 0)
+		printf("\nNenhum arquivo criado!\n");
+	else
+		printf("\nArquivos criado:\n");
+	for(int i = 0; i < resposta; i++){
+		if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
+			perror("[Client] receiving datagram packet");
+
+		printf("%i. %s\n", i + 1, msg.subject);
+	}
 }
 
 void atualizaDados(){

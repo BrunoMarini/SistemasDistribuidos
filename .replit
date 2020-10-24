@@ -1,2 +1,2 @@
 language = "c"
-run = "gcc clienteudp.c -o c && gcc serverudp.c -o s && ./s &"
+run = "gcc -w clienteudp.c -o c && gcc -w loadBalancer.c -o l && gcc -w server.c -o s && ./c"

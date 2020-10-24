@@ -56,6 +56,7 @@ char folder[MAX_DEFAULT_SIZE], nome[MAX_DEFAULT_SIZE];
 int main()
 {
 	int op;
+	char c;
 	char pid[6], aux[MAX_DEFAULT_SIZE];
 	struct hostent *hp, *gethostbyname();
   	struct mensagem msg;
@@ -159,7 +160,6 @@ int main()
 				case 1:
 					printf("Insira o nome do arquivo que deseja ler: ");
 					scanf("%s", msg.subject);
-					
 					break;
 				case 2:
 					printf("Insira o nome do arquivo que deseja criar: ");
@@ -171,6 +171,13 @@ int main()
 					printf("Preparando para pedir %s \n", msg.subject);
 					break;
 				case 4:
+					printf("Insira o nome do arquivo que deseja excluir: ");
+					scanf("%s", msg.subject);
+					getchar();
+					printf("Tem certeza que deseja excluir o arquivo %s [Y/n]?", msg.subject);
+					scanf("%c", &c);
+					if(c == 'n')
+						continue;
 					break;
 				case 5:
 					break;
@@ -277,7 +284,7 @@ void editFile(struct mensagem msg){
 		c = getc(fp);
 		i++;
    	}
-	printf("\n\n %s \n\n", msg.message);
+
 	msg.time = time(NULL);
 	msg.codigo = 6;
 	strcpy(msg.user, nome);

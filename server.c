@@ -42,6 +42,7 @@ int ret;
 int paiPid;
 
 int inserirNoFim(struct data **, char *);
+void deletaArquivo(struct data**, char *);
 void retornaCriados(struct data **);
 struct mensagemUsuario encontrarArquivo(struct data *, char *, int);
 void atualizaArquivo(struct data**, struct mensagemUsuario);
@@ -138,6 +139,7 @@ int main()
 		/* EXCLUIR */
 		case 4:
 			printf("[Server] Excluir arquivo\n");
+			deletaArquivo(&raiz, msg.subject);
 			break;
 		/* VER CRIADOS */
 		case 5:
@@ -327,4 +329,29 @@ void atualizaArquivo(struct data** raiz, struct mensagemUsuario msg){
 
 		printf("[Server] Nao existe mais, adicionando no fim!");
 	}
+}
+
+void deletaArquivo(struct data **raiz, char *subject){
+	if(*raiz == NULL)
+		return;
+
+	struct data *aux = *raiz;
+	struct data *ant;
+
+	if(strcmp((*raiz)->subject, subject)==0){
+		*raiz = (*raiz)->prox;
+		return;
+	}
+
+	ant = aux;
+	aux = aux->prox;
+
+	do{
+		if(strcmp(aux->subject, subject) == 0){
+			ant->prox = aux->prox;
+			break;
+		}
+		ant = aux;
+		aux = aux->prox;
+	}while(aux != NULL);
 }

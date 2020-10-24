@@ -10,8 +10,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define MAX_MESSAGE_SIZE 500
+#define MAX_DEFAULT_SIZE 50
+
+#define READ_FILE 3
 #define EDIT_FILE 2
-#define READ_FILES 1
+#define CREATED_FILES 1
 #define CREATE_SUCCESS 0
 #define ERROR_NAME_IN_USE -1
 #define FILE_NOT_FOUND -2
@@ -24,9 +28,9 @@ struct conexao {
 struct mensagem {
 	int time;
 	int codigo;
-	char user[50];
-	char subject[50];
-	char message[500];
+	char user[MAX_DEFAULT_SIZE];
+	char subject[MAX_DEFAULT_SIZE];
+	char message[MAX_MESSAGE_SIZE];
 };
 
 //pthread_mutex_t lock; 
@@ -40,25 +44,27 @@ struct mensagem {
 
 //pkill s && pkill l && pkill c
 
-void atualizaDados();
 void editFile(struct mensagem);
 void printArquivos();
 void parseResponse(struct mensagem);
+void showFile(struct mensagem);
 
-struct sockaddr_in name;
+struct sockaddr_in name, nameServer;
 int sock;
-char folder[50], nome[50];
+char folder[MAX_DEFAULT_SIZE], nome[MAX_DEFAULT_SIZE];
 
 int main()
 {
 	int op;
-	char pid[6], aux[50];
-	struct sockaddr_in nameServer;
+	char pid[6], aux[MAX_DEFAULT_SIZE];
 	struct hostent *hp, *gethostbyname();
   	struct mensagem msg;
 	struct conexao con;
 	struct stat st = {0};
 
+	system("./s &");
+	system("./l &");
+	sleep(2);
   	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if(sock<0) {
@@ -151,11 +157,13 @@ int main()
 
 			switch (op) {
 				case 1:
+					printf("Insira o nome do arquivo que deseja ler: ");
+					scanf("%s", msg.subject);
+					
 					break;
 				case 2:
 					printf("Insira o nome do arquivo que deseja criar: ");
 					scanf("%s", msg.subject);
-					printf("Preparando arquivo %s \n", msg.subject);
 					break;
 				case 3:
 					printf("Insira o nome do arquivo que deseja editar: ");
@@ -208,7 +216,7 @@ void parseResponse(struct mensagem msg){
 		case ERROR_NAME_IN_USE:
 			printf("\nERRO! O nome já está em uso!\n");
 			break;
-		case READ_FILES:
+		case CREATED_FILES:
 			printArquivos();
 			break;
 		case FILE_NOT_FOUND:
@@ -216,6 +224,9 @@ void parseResponse(struct mensagem msg){
 			break;
 		case EDIT_FILE:
 			editFile(msg);
+			break;
+		case READ_FILE:
+			showFile(msg);
 			break;
 	}
 }
@@ -257,10 +268,27 @@ void editFile(struct mensagem msg){
 	printf("Pressione qualquer tecla para continuar...");
 	getchar();
 	//FALTA ENVIAR O ATUALZIADO
+	fp = fopen(path, "r");
+	//fread(msg.message, 1, (long)ftell(fp), fp);
+	char c = getc(fp);
+	int i = 0;
+   	while (c != EOF) {
+		msg.message[i] = c;
+		c = getc(fp);
+		i++;
+   	}
+	printf("\n\n %s \n\n", msg.message);
+	msg.time = time(NULL);
+	msg.codigo = 6;
+	strcpy(msg.user, nome);
+
+	if (sendto (sock, (char *)&msg, sizeof (struct mensagem), 0, (struct sockaddr *) &nameServer, sizeof nameServer) < 0)
+				perror("[Client] Sending datagram message");
 }
 
-void atualizaDados(){
-	while(1){
-
-	}
+void showFile(struct mensagem msg){
+	printf("\nExibindo arquivo: %s \n", msg.subject);
+	printf("\n%s\n", msg.message);
+	printf("\nCriado por: %s \n", msg.user);
+	printf("Em: %i\n", msg.time);
 }

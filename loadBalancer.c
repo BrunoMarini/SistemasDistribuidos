@@ -8,12 +8,15 @@
 #include <strings.h>
 #include <string.h>
 
+#define MAX_MESSAGE_SIZE 500
+#define MAX_DEFAULT_SIZE 50
+
 struct mensagemUsuario {
 	int time;
 	int codigo;
-	char user[50];
-	char fileName[50];
-	char message[500];
+	char user[MAX_DEFAULT_SIZE];
+	char fileName[MAX_DEFAULT_SIZE];
+	char message[MAX_MESSAGE_SIZE];
 };
 
 struct mensagemServer {

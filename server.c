@@ -9,8 +9,9 @@
 #include <strings.h>
 #include <string.h>
 
+#define READ_FILE 3
 #define EDIT_FILE 2
-#define READ_FILES 1
+#define CREATED_FILES 1
 #define CREATE_SUCCESS 0
 #define ERROR_NAME_IN_USE -1
 #define FILE_NOT_FOUND -2
@@ -30,6 +31,8 @@ struct mensagemServer {
 };
 
 struct data {
+	int time;
+	char user[50];
 	char subject[50];
 	char message[500];
 	struct data *prox;
@@ -40,7 +43,8 @@ int paiPid;
 
 int inserirNoFim(struct data **, char *);
 void retornaCriados(struct data **);
-struct mensagemUsuario encontrarArquivo(struct data *, char *);
+struct mensagemUsuario encontrarArquivo(struct data *, char *, int);
+void atualizaArquivo(struct data**, struct mensagemUsuario);
 
 int sock;
 struct sockaddr_in cli_send;
@@ -119,6 +123,7 @@ int main()
 		/* LER */
 		case 1:
 			printf("[Server] Ler arquivo\n");
+			msg = encontrarArquivo(raiz, msg.subject, READ_FILE);
 			break;
 		/* CRIAR */
 		case 2:
@@ -128,7 +133,7 @@ int main()
 		/* EDITAR */
 		case 3:
 			printf("[Server] Editar arquivo (%s)\n", msg.subject);
-			msg = encontrarArquivo(raiz, msg.subject);
+			msg = encontrarArquivo(raiz, msg.subject, EDIT_FILE);
 			break;
 		/* EXCLUIR */
 		case 4:
@@ -140,8 +145,9 @@ int main()
 			retornaCriados(&raiz);
 			continue;
 		case 6:
-			printf("[Server] Arquivo editado\n");
-			//msg.codigo = atualizaArquivo(&raiz, msg.subject, msg.message);
+			printf("[Server] Editar arquivo\n");
+			atualizaArquivo(&raiz, msg);
+			continue;
 		default:
 			printf("[Server] Opcao nao encontrada\n");
 			break;
@@ -208,7 +214,6 @@ int inserirNoFim(struct data **raiz, char *subject){
             aux = aux->prox;
         }
         aux->prox = novo;
-        *raiz = aux;
     }
 	return CREATE_SUCCESS;
 }
@@ -235,7 +240,7 @@ void retornaCriados(struct data **raiz){
 
 	printf("[Server] Existe %i arquivos criados\n", count);
 
-	msg.codigo = READ_FILES;
+	msg.codigo = CREATED_FILES;
 	if (sendto (sock,(char *)&msg,sizeof msg, 0, (struct sockaddr *)&cli_send, sizeof cli_send) < 0)
 		perror("[Server] Sending datagram message");	
 
@@ -255,7 +260,7 @@ void retornaCriados(struct data **raiz){
 	}
 }
 
-struct mensagemUsuario encontrarArquivo(struct data *raiz, char *subject){
+struct mensagemUsuario encontrarArquivo(struct data *raiz, char *subject, int op){
 	struct mensagemUsuario msg;
 	msg.codigo = FILE_NOT_FOUND;
 	if(raiz == NULL){
@@ -265,7 +270,9 @@ struct mensagemUsuario encontrarArquivo(struct data *raiz, char *subject){
 			if(strcmp(raiz->subject, subject) == 0){
 				strcpy(msg.subject, raiz->subject);
 				strcpy(msg.message, raiz->message);
-				msg.codigo = EDIT_FILE;
+				strcpy(msg.user, raiz->user);
+				msg.time = raiz->time;
+				msg.codigo = op;
 				break;
 			}
 			if(raiz->prox == NULL)
@@ -274,4 +281,50 @@ struct mensagemUsuario encontrarArquivo(struct data *raiz, char *subject){
 		}
 	}
 	return msg;
+}
+
+void atualizaArquivo(struct data** raiz, struct mensagemUsuario msg){
+	struct data *aux = *raiz;
+	struct data *novo;
+
+	if(*raiz == NULL){
+		printf("[Server] Raiz nula, recriando!\n");
+		novo = (struct data *) malloc(sizeof(struct data));
+		if(novo == NULL) exit(0);
+		strcpy(novo->subject, msg.subject);
+		strcpy(novo->message, msg.message);
+		strcpy(novo->user, msg.user);
+		novo->time = msg.time;
+		novo->prox = NULL;
+		*raiz = novo;
+	} else {
+		do{
+			if(strcmp(aux->subject, msg.subject) == 0){
+				strcpy(aux->message, msg.message);
+				strcpy(aux->user, msg.user);
+				aux->time = msg.time;
+				printf("[Server] Encontrado, atualizando! %s %s \n", aux->user, msg.user);
+				return;
+			}
+			aux = aux -> prox;
+		}while(aux != NULL);
+		
+		printf("ta foda\n");
+
+		aux = *raiz;
+
+		while(aux -> prox != NULL) 
+			aux = aux -> prox;
+		
+		novo = (struct data *) malloc(sizeof(struct data));
+		if(novo == NULL) exit(0);
+		strcpy(novo->subject, msg.subject);
+		strcpy(novo->message, msg.message);
+		strcpy(novo->user, msg.user);
+		novo->time = msg.time;
+		novo->prox = NULL;
+		aux->prox = novo;
+
+		printf("[Server] Nao existe mais, adicionando no fim!");
+	}
 }

@@ -87,7 +87,7 @@ int main()
 	int cont=0;
   
   	/* Le */
-	printf("[LoadBalancer %i] Starting iteration\n", getpid());
+	printf("[LoadBalancer] Starting iteration\n");
   	while (1)
 	{
 		/* Recebe o request */

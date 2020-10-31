@@ -127,7 +127,7 @@ int main()
 	}
 
   	/* Le */
-	printf("[Server1] Starting iteration\n", getpid());
+	printf("[Server1] Starting iteration\n");
   	while (1)
 	{
 		/* Recebe o request */
@@ -385,7 +385,7 @@ void atualizaArquivo(struct data** raiz, struct mensagemUsuario msg){
 		novo->prox = NULL;
 		aux->prox = novo;
 
-		printf("[Server1] Nao existe mais, adicionando no fim!");
+		printf("[Server1] Nao existe mais, adicionado no fim!\n");
 	}
 }
 
@@ -478,6 +478,7 @@ void enviaAtualizacao(struct mensagemUsuario msg){
 	struct dataShare data;
 	data.codigo = 1;
 	data.msg = msg;
+	
 	if (sendto (sock,(char *)&data,sizeof data, 0, (struct sockaddr *)&server2, sizeof server2) < 0)
 			perror("[Server1] Sending datagram message");
 	printf("[Server2] Alteracao enviada!\n");
@@ -485,7 +486,6 @@ void enviaAtualizacao(struct mensagemUsuario msg){
 
 void sincronizaRecebimento(struct data**raiz, struct mensagemUsuario msg){
 	struct data *aux = *raiz;
-
 	switch(msg.codigo){
 		/* EXCLUIR */ 
 		case 4:

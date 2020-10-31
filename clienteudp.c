@@ -168,6 +168,7 @@ int main()
 				case 2:
 					printf("Insira o nome do arquivo que deseja criar: ");
 					scanf("%s", msg.subject);
+					strcpy(msg.message, "\0");
 					break;
 				case 3:
 					printf("Insira o nome do arquivo que deseja editar: ");

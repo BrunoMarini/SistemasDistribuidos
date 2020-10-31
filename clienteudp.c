@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <time.h>
 
 #define MAX_MESSAGE_SIZE 500
 #define MAX_DEFAULT_SIZE 50
@@ -26,7 +27,7 @@ struct conexao {
 };
 
 struct mensagem {
-	int time;
+	unsigned long time;
 	int codigo;
 	char user[MAX_DEFAULT_SIZE];
 	char subject[MAX_DEFAULT_SIZE];
@@ -48,6 +49,7 @@ void editFile(struct mensagem);
 void printArquivos();
 void parseResponse(struct mensagem);
 void showFile(struct mensagem);
+void printEpoch(char*);
 
 struct sockaddr_in name, nameServer;
 int sock;
@@ -185,6 +187,9 @@ int main()
 				default:
 					continue;
 			}
+			
+			msg.time = (unsigned long)time(NULL);
+			printf("[Client] Atribuindo tempo request! [%lu]\n", msg.time);
 
 			/* Envia */
 			if (sendto (sock, (char *)&msg, sizeof (struct mensagem), 0, (struct sockaddr *) &nameServer, sizeof nameServer) < 0)
@@ -294,8 +299,26 @@ void editFile(struct mensagem msg){
 }
 
 void showFile(struct mensagem msg){
+	char buffer[30];
+	sprintf(buffer,"%lu", msg.time);
+
 	printf("\nExibindo arquivo: %s \n", msg.subject);
-	printf("\n%s\n", msg.message);
+	if(strlen(msg.message) == 0)
+		printf("\n** Mensagem vazia **\n");
+	else
+		printf("\n%s\n", msg.message);
 	printf("\nCriado por: %s \n", msg.user);
-	printf("Em: %i\n", msg.time);
+	printEpoch(buffer);	
+}
+
+void printEpoch(char* time){
+	struct tm tm;
+    char buf[255];
+	
+    memset(&tm, 0, sizeof(struct tm));
+    strptime(time, "%s", &tm);
+    strftime(buf, sizeof(buf), "Em: %d %b %Y as %H:%M (GMT 00:00)", &tm);
+    puts(buf);
+    
+	return;
 }

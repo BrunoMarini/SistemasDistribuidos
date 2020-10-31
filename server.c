@@ -18,7 +18,7 @@
 #define ERROR_EMPTY_DATABASE -3
 
 struct mensagemUsuario {
-	int time;
+	unsigned long time;
 	int codigo;
 	char user[50];
 	char subject[50];
@@ -31,7 +31,7 @@ struct mensagemServer {
 };
 
 struct data {
-	int time;
+	unsigned long time;
 	char user[50];
 	char subject[50];
 	char message[500];
@@ -41,10 +41,10 @@ struct data {
 int ret;
 int paiPid;
 
-int inserirNoFim(struct data **, char *);
+int inserirNoFim(struct data **, struct mensagemUsuario);
 void deletaArquivo(struct data**, char *);
 void retornaCriados(struct data **);
-struct mensagemUsuario encontrarArquivo(struct data *, char *, int);
+struct mensagemUsuario encontrarArquivo(struct data *, struct mensagemUsuario, int op);
 void atualizaArquivo(struct data**, struct mensagemUsuario);
 
 int sock;
@@ -124,17 +124,17 @@ int main()
 		/* LER */
 		case 1:
 			printf("[Server] Ler arquivo\n");
-			msg = encontrarArquivo(raiz, msg.subject, READ_FILE);
+			msg = encontrarArquivo(raiz, msg, READ_FILE);
 			break;
 		/* CRIAR */
 		case 2:
 			printf("[Server] Criar arquivo (%s)\n", msg.subject);
-			msg.codigo = inserirNoFim(&raiz, msg.subject);
+			msg.codigo = inserirNoFim(&raiz, msg);
 			break;
 		/* EDITAR */
 		case 3:
 			printf("[Server] Editar arquivo (%s)\n", msg.subject);
-			msg = encontrarArquivo(raiz, msg.subject, EDIT_FILE);
+			msg = encontrarArquivo(raiz, msg, EDIT_FILE);
 			break;
 		/* EXCLUIR */
 		case 4:
@@ -184,18 +184,18 @@ int main()
 	//}
 }
 
-int inserirNoFim(struct data **raiz, char *subject){
+int inserirNoFim(struct data **raiz, struct mensagemUsuario msg){
     int ret;
 	struct data *aux = *raiz;
 	if(*raiz != NULL){
-		printf("[Server] File: %s Name: %s\n", aux->subject, subject);
-		ret = strcmp(aux->subject, subject);
+		printf("[Server] File: %s Name: %s\n", aux->subject, msg.subject);
+		ret = strcmp(aux->subject, msg.subject);
 		if(ret == 0)
 			return ERROR_NAME_IN_USE;
 		while(aux->prox != NULL){
 			aux = aux->prox;
-			printf("[Server] File: %s Name: %s\n", aux->subject, subject);
-			ret = strcmp(aux->subject, subject);
+			printf("[Server] File: %s Name: %s\n", aux->subject, msg.subject);
+			ret = strcmp(aux->subject, msg.subject);
 			if(ret == 0)
 				return ERROR_NAME_IN_USE;
 		}
@@ -204,7 +204,9 @@ int inserirNoFim(struct data **raiz, char *subject){
 	struct data *novo;
     novo = (struct data *) malloc(sizeof(struct data));
     if(novo == NULL) exit(0);
-    strcpy(novo->subject, subject);
+    strcpy(novo->subject, msg.subject);
+	strcpy(novo->user, msg.user);
+	novo->time = msg.time;
     novo->prox = NULL;
     
     if(*raiz == NULL){
@@ -262,14 +264,14 @@ void retornaCriados(struct data **raiz){
 	}
 }
 
-struct mensagemUsuario encontrarArquivo(struct data *raiz, char *subject, int op){
+struct mensagemUsuario encontrarArquivo(struct data *raiz, struct mensagemUsuario r, int op){
 	struct mensagemUsuario msg;
 	msg.codigo = FILE_NOT_FOUND;
 	if(raiz == NULL){
 		msg.codigo = ERROR_EMPTY_DATABASE;
 	}else{
 		while(1){
-			if(strcmp(raiz->subject, subject) == 0){
+			if(strcmp(raiz->subject, r.subject) == 0){
 				strcpy(msg.subject, raiz->subject);
 				strcpy(msg.message, raiz->message);
 				strcpy(msg.user, raiz->user);
@@ -302,11 +304,13 @@ void atualizaArquivo(struct data** raiz, struct mensagemUsuario msg){
 	} else {
 		do{
 			if(strcmp(aux->subject, msg.subject) == 0){
-				strcpy(aux->message, msg.message);
-				strcpy(aux->user, msg.user);
-				aux->time = msg.time;
-				printf("[Server] Encontrado, atualizando! %s %s \n", aux->user, msg.user);
-				return;
+				if(aux->time < msg.time){
+					strcpy(aux->message, msg.message);
+					strcpy(aux->user, msg.user);
+					aux->time = msg.time;
+					printf("[Server] Encontrado, atualizando! %s %s \n", aux->user, msg.user);
+					return;
+				}
 			}
 			aux = aux -> prox;
 		}while(aux != NULL);

@@ -12,7 +12,7 @@
 #define MAX_DEFAULT_SIZE 50
 
 struct mensagemUsuario {
-	int time;
+	unsigned long time;
 	int codigo;
 	char user[MAX_DEFAULT_SIZE];
 	char fileName[MAX_DEFAULT_SIZE];

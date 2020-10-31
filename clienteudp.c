@@ -65,9 +65,11 @@ int main()
 	struct conexao con;
 	struct stat st = {0};
 
-	system("./s &");
+	system("./s1 &");
+	system("./s2 &");
 	system("./l &");
 	sleep(2);
+	
   	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if(sock<0) {

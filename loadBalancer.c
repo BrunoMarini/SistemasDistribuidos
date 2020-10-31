@@ -26,15 +26,22 @@ struct mensagemServer {
 
 int ret;
 
+pthread_mutex_t lock; 
+//pthread_mutex_lock(&lock); 
+//pthread_mutex_unlock(&lock); 
+
 int main()
 {
-	int sock, length;
+	int sock, length, serverNum = 1;
 	struct sockaddr_in name, cli_send;
 	struct sockaddr_in server1, server2;
+	struct sockaddr_in serverToSend;
 	struct hostent *hp, *gethostbyname();
 	char buf[1024];
 	struct mensagemUsuario msg;
 	struct mensagemServer msgServer;
+
+	pthread_mutex_unlock(&lock);
 
 	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -73,6 +80,10 @@ int main()
 	server1.sin_family = AF_INET;
 	server1.sin_port = htons(6969);
 
+	bcopy ((char *)hp->h_addr, (char *)&server2.sin_addr, hp->h_length);
+	server2.sin_family = AF_INET;
+	server2.sin_port = htons(6548);
+
 	int cont=0;
   
   	/* Le */
@@ -82,6 +93,17 @@ int main()
 		/* Recebe o request */
 		if (recvfrom(sock,(char *)&msg,sizeof(msg),0,(struct sockaddr *)&name, &length) < 0)
 			perror("[LoadBalancer] Receiving datagram packet");
+
+		pthread_mutex_lock(&lock);
+		printf("[LoadBalancer] Enviando para o server: %i\n", serverNum);
+		if(serverNum == 1){
+			serverToSend = server1;
+			serverNum = 2;
+		}else if(serverNum == 2){
+			serverToSend = server2;
+			serverNum = 1;
+		}
+		pthread_mutex_unlock(&lock);
 
 		/* Exibe info de quem fez o request */
 		printf("[LoadBalancer] name.sin_family: %i\n", name.sin_family);
@@ -94,6 +116,8 @@ int main()
 			printf("[LoadBalancer] Codigo para auto destruicao\n");
 			msgServer.msg = msg;
 			if (sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&server1, sizeof name) < 0)
+				perror("[LoadBalancer] Sending datagram message");
+			if (sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&server2, sizeof name) < 0)
 				perror("[LoadBalancer] Sending datagram message");
 			break;
 		}
@@ -119,7 +143,7 @@ int main()
 		
 		printf("[LoadBalancer] Encaminhando request para servidor\n");
 		/* Envia o dado para o server */
-		if (sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&server1, sizeof name) < 0)
+		if (sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&serverToSend, sizeof name) < 0)
 			perror("[LoadBalancer] Sending datagram message");
 
 		/* REMOVERRRRRR */

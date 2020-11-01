@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+
 
 #define MAX_MESSAGE_SIZE 500
 #define MAX_DEFAULT_SIZE 50
@@ -25,10 +28,12 @@ struct mensagemServer {
 };
 
 int ret;
+char folder[MAX_DEFAULT_SIZE];
 
-pthread_mutex_t lock; 
-//pthread_mutex_lock(&lock); 
-//pthread_mutex_unlock(&lock); 
+pthread_mutex_t lockServer; 
+pthread_mutex_t lockLog;
+
+void addLog(char*);
 
 int main()
 {
@@ -37,11 +42,20 @@ int main()
 	struct sockaddr_in server1, server2;
 	struct sockaddr_in serverToSend;
 	struct hostent *hp, *gethostbyname();
-	char buf[1024];
+	char buf[1024], aux[MAX_MESSAGE_SIZE];
 	struct mensagemUsuario msg;
 	struct mensagemServer msgServer;
+	struct stat st = {0};
 
-	pthread_mutex_unlock(&lock);
+	pthread_mutex_unlock(&lockServer);
+	pthread_mutex_unlock(&lockLog);
+
+	/* Cria o folder onde os arquivos de log serão armazenados */
+	strcpy(folder, "LoadBalancerLogs/");
+	if (stat(folder, &st) == -1) {
+    	mkdir(folder, 0700);
+	}
+	strcat(folder, "log.txt");
 
 	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -66,7 +80,10 @@ int main()
 		perror("[LoadBalancer] Getting socket name");
 		exit(1);
 	}
-	printf("[LoadBalancer] Socket port #%d\n", ntohs(name.sin_port));
+
+	sprintf(buf, "[LoadBalancer] Socket port #%d\n", ntohs(name.sin_port));
+	//printf("%s", buf);
+	addLog(buf);
 
 	/* Associa o servidor (porta pre definida) */
 	hp = gethostbyname("localhost"); //chama dns
@@ -87,15 +104,22 @@ int main()
 	int cont=0;
   
   	/* Le */
-	printf("[LoadBalancer] Starting iteration\n");
+	sprintf(buf, "[LoadBalancer] Starting iteration\n");
+	//printf("%s", buf);
+	addLog(buf);
+
   	while (1)
 	{
 		/* Recebe o request */
 		if (recvfrom(sock,(char *)&msg,sizeof(msg),0,(struct sockaddr *)&name, &length) < 0)
 			perror("[LoadBalancer] Receiving datagram packet");
 
-		pthread_mutex_lock(&lock);
-		printf("[LoadBalancer] Enviando para o server: %i\n", serverNum);
+		pthread_mutex_lock(&lockServer);
+		
+		sprintf(buf, "[LoadBalancer] Enviando para o server: %i\n", serverNum);
+		//printf("%s", buf);
+		addLog(buf);
+
 		if(serverNum == 1){
 			serverToSend = server1;
 			serverNum = 2;
@@ -103,17 +127,31 @@ int main()
 			serverToSend = server2;
 			serverNum = 1;
 		}
-		pthread_mutex_unlock(&lock);
+		pthread_mutex_unlock(&lockServer);
 
 		/* Exibe info de quem fez o request */
-		printf("[LoadBalancer] name.sin_family: %i\n", name.sin_family);
-		printf("[LoadBalancer] name.sin_addr: %s\n", inet_ntoa(name.sin_addr));
-		printf("[LoadBalancer] name.sin_port: %i\n", name.sin_port);
-		printf("[LoadBalancer] Codigo: %i\n", msg.codigo);
+		//printf("[LoadBalancer] name.sin_family: %i\n", name.sin_family);
+		sprintf(buf, "[LoadBalancer] name.sin_family: %i\n", name.sin_family);
+		
+		//printf("[LoadBalancer] name.sin_addr: %s\n", inet_ntoa(name.sin_addr));
+		sprintf(aux, "[LoadBalancer] name.sin_family: %i\n", name.sin_family);
+		strcat(buf, aux);
+
+		//printf("[LoadBalancer] name.sin_port: %i\n", name.sin_port);
+		sprintf(aux, "[LoadBalancer] name.sin_family: %i\n", name.sin_family);
+		strcat(buf, aux);
+
+		//printf("[LoadBalancer] Codigo: %i\n", msg.codigo);
+		sprintf(aux, "[LoadBalancer] name.sin_family: %i\n", name.sin_family);
+		strcat(buf, aux);
+		addLog(buf);
 
 		/* Mandar codigo para matar o server tambem */
 		if(msg.codigo == 9){
-			printf("[LoadBalancer] Codigo para auto destruicao\n");
+			//printf("[LoadBalancer] Codigo para auto destruicao\n");
+			sprintf(buf, "[LoadBalancer] Codigo para auto destruicao\n");
+			addLog(buf);
+
 			msgServer.msg = msg;
 			if (sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&server1, sizeof name) < 0)
 				perror("[LoadBalancer] Sending datagram message");
@@ -127,7 +165,9 @@ int main()
 		if(ret > 0)
 			continue;
 		
-		printf("[LoadBalancer] Sou filho novo [%i]\n", getpid());
+		//printf("[LoadBalancer] Sou filho novo [%i]\n", getpid());
+		sprintf(buf, "[LoadBalancer] Sou filho novo [%i]\n", getpid());
+		addLog(buf);
 
 		/* Associa para resposta */
 		cli_send.sin_family = name.sin_family;
@@ -141,7 +181,10 @@ int main()
 		msgServer.msg = msg;
 		msgServer.client = cli_send;
 		
-		printf("[LoadBalancer] Encaminhando request para servidor\n");
+		//printf("[LoadBalancer] Encaminhando request para servidor\n");
+		sprintf(buf, "[LoadBalancer] Encaminhando request para servidor\n");
+		addLog(buf);
+
 		/* Envia o dado para o server */
 		if (sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&serverToSend, sizeof name) < 0)
 			perror("[LoadBalancer] Sending datagram message");
@@ -151,13 +194,32 @@ int main()
 	}
 
 	if(ret != 0){
-		printf("[Server %i] Acabou, fiz tudo que eu podia =( \n", getpid());
+		//printf("[Server %i] Acabou, fiz tudo que eu podia =( \n", getpid());
+		sprintf(buf, "[Server %i] Acabou, fiz tudo que eu podia =( \n", getpid());
+		addLog(buf);
+
 		wait();
-		printf("[LoadBalancer] Todos filhos mortos\n");
+		
+		//printf("[LoadBalancer] Todos filhos mortos\n");
+		sprintf(buf, "[LoadBalancer] Todos filhos mortos\n");
+		addLog(buf);
+
 		close(sock);
 		exit(0);	
 	}else{
-		printf("[LoadBalancer] Morri %i\n", getpid());
+		//printf("[LoadBalancer] Morri %i\n", getpid());
+		sprintf(buf, "[LoadBalancer] Morri %i\n", getpid());
+		addLog(buf);
+
 		exit(0);	
 	}
+}
+
+void addLog(char*log){
+	FILE *fp;
+	pthread_mutex_lock(&lockLog);
+	fp = fopen(folder, "a+");
+	fprintf(fp, "%s", log);
+	fclose(fp);
+	pthread_mutex_unlock(&lockLog);
 }

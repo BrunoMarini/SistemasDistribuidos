@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 
 #define READ_FILE 3
 #define EDIT_FILE 2
@@ -16,6 +18,9 @@
 #define ERROR_NAME_IN_USE -1
 #define FILE_NOT_FOUND -2
 #define ERROR_EMPTY_DATABASE -3
+
+#define MAX_DEFAULT_SIZE 50
+#define MAX_MESSAGE_SIZE 500
 
 struct mensagemUsuario {
 	unsigned long time;
@@ -55,27 +60,38 @@ void* create_shared_memory(size_t);
 void recebeDados();
 void enviaAtualizacao(struct mensagemUsuario);
 void sincronizaRecebimento(struct data**, struct mensagemUsuario);
+void addLog(char*);
 
 int sock;
 void* shmem;
 struct sockaddr_in cli_send;
 struct mensagemUsuario msg;
 struct sockaddr_in server1;
+char buf[1024];
+char folder[MAX_DEFAULT_SIZE];
 
-pthread_mutex_t lock;
+pthread_mutex_t lock, lockLog;
 
 int main()
 {
 	int length;
 	struct sockaddr_in name;
-	char buf[1024];
 	struct mensagemServer msgServer;
 	struct mensagemUsuario auxUsuario;
 	struct dataShare dataShare, *d;
 	struct data *raiz = NULL;
 	struct hostent *hp, *gethostbyname();	
+	struct stat st = {0};
 
 	pthread_mutex_unlock(&lock);
+	pthread_mutex_unlock(&lockLog);
+
+	/* Cria o folder onde os arquivos de log serão armazenados */
+	strcpy(folder, "Server2Logs/");
+	if (stat(folder, &st) == -1) {
+    	mkdir(folder, 0700);
+	}
+	strcat(folder, "log.txt");
 
   	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -100,10 +116,10 @@ int main()
 		perror("[Server2] Getting socket name");
 		exit(1);
 	}
-	printf("[Server2] Socket port #%d\n", ntohs(name.sin_port));
+	sprintf(buf, "[Server2] Socket port #%d\n", ntohs(name.sin_port)); addLog(buf);
 
 	/* Preparando endereco server 1 */
-	printf("[Server2] Preparando para receber!\n");
+	sprintf(buf, "[Server2] Preparando para receber!\n"); addLog(buf);
 
 	hp = gethostbyname("localhost"); //chama dns
 	if (hp==0) {
@@ -128,18 +144,18 @@ int main()
 	}
 
   	/* Le */
-	printf("[Server2] Starting iteration\n");
+	sprintf(buf, "[Server2] Starting iteration\n"); addLog(buf);
   	while (1)
 	{
 		/* Recebe o request */
 		if (recvfrom(sock,(char *)&msgServer,sizeof(msgServer),0,(struct sockaddr *)&name, &length) < 0)
 			perror("[Server2] Receiving datagram packet");
 
-		printf("[Server2] Verificando se existe algum dado compartilhado\n");
+		sprintf(buf, "[Server2] Verificando se existe algum dado compartilhado\n"); addLog(buf);
 		pthread_mutex_lock(&lock);
 		d = shmem;
 		if(d->codigo == 1){
-			printf("[Server2] Existe, atualizando!\n");
+			sprintf(buf, "[Server2] Existe, atualizando!\n"); addLog(buf);
 			sincronizaRecebimento(&raiz, d->msg);
 			d->codigo = -1;
 			memcpy(shmem, &d, sizeof(d));
@@ -152,9 +168,9 @@ int main()
 		//printf("[Server2] name.sin_port: %i\n", name.sin_port);
 		//printf("[Server2] Codigo: %i\n", msg.codigo);
 		msg = msgServer.msg;
-		printf("[Server2] Codigo recebido: %i\n", msg.codigo);
+		sprintf(buf, "[Server2] Codigo recebido: %i\n", msg.codigo); addLog(buf);
 		if(msg.codigo == 9){
-			printf("[Server2] Codigo para auto destruicao\n");
+			sprintf(buf, "[Server2] Codigo para auto destruicao\n"); addLog(buf);
 			break;
 		}
 
@@ -174,43 +190,43 @@ int main()
 		switch (msg.codigo){
 		/* LER */
 		case 1:
-			printf("[Server2] Ler arquivo\n");
+			sprintf(buf, "[Server2] Ler arquivo\n"); addLog(buf);
 			msg = encontrarArquivo(raiz, msg, READ_FILE);
 			break;
 		/* CRIAR */
 		case 2:
 			auxUsuario = msg;
-			printf("[Server2] Criar arquivo (%s)\n", msg.subject);
+			sprintf(buf, "[Server2] Criar arquivo (%s)\n", msg.subject); addLog(buf);
 			msg.codigo = inserirNoFim(&raiz, msg);
 			enviaAtualizacao(auxUsuario);
 			break;
 		/* EDITAR */
 		case 3:
 			auxUsuario = msg;
-			printf("[Server2] Editar arquivo (%s)\n", msg.subject);
+			sprintf(buf, "[Server2] Editar arquivo (%s)\n", msg.subject); addLog(buf);
 			msg = encontrarArquivo(raiz, msg, EDIT_FILE);
 			enviaAtualizacao(auxUsuario);
 			break;
 		/* EXCLUIR */
 		case 4:
 			auxUsuario = msg;
-			printf("[Server2] Excluir arquivo\n");
+			sprintf(buf, "[Server2] Excluir arquivo\n"); addLog(buf);
 			deletaArquivo(&raiz, msg.subject);
 			enviaAtualizacao(auxUsuario);
 			break;
 		/* VER CRIADOS */
 		case 5:
-			printf("[Server2] Ver arquivos\n");
+			sprintf(buf, "[Server2] Ver arquivos\n"); addLog(buf);
 			retornaCriados(&raiz);
 			continue;
 		case 6:
 			auxUsuario = msg;
-			printf("[Server2] Editar arquivo\n");
+			sprintf(buf, "[Server2] Editar arquivo\n"); addLog(buf);
 			atualizaArquivo(&raiz, msg);
 			enviaAtualizacao(auxUsuario);
 			continue;
 		default:
-			printf("[Server2] Opcao nao encontrada\n");
+			sprintf(buf, "[Server2] Opcao nao encontrada\n"); addLog(buf);
 			break;
 		}
 
@@ -225,7 +241,7 @@ int main()
 		//msg.porta = 67213/*name.sin_port*/;
 		//strcpy(msg.ip, inet_ntoa(name.sin_addr));
 
-		printf("[Server2] Devolvendo resultado\n");
+		sprintf(buf, "[Server2] Devolvendo resultado\n"); addLog(buf);
 		/* Envia o dado */
 		if (sendto (sock,(char *)&msg,sizeof msg, 0, (struct sockaddr *)&cli_send, sizeof cli_send) < 0)
 			perror("[Server2] Sending datagram message");
@@ -238,7 +254,7 @@ int main()
 		close(sock);
 		exit(0);	
 	}else{*/
-		printf("[Server2] Morri %i\n", getpid());
+		sprintf(buf, "[Server2] Morri %i\n", getpid()); addLog(buf);
 		exit(0);	
 	//}
 }
@@ -247,13 +263,13 @@ int inserirNoFim(struct data **raiz, struct mensagemUsuario msg){
     int ret;
 	struct data *aux = *raiz;
 	if(*raiz != NULL){
-		printf("[Server2] File: %s Name: %s\n", aux->subject, msg.subject);
+		sprintf(buf, "[Server2] File: %s Name: %s\n", aux->subject, msg.subject); addLog(buf);
 		ret = strcmp(aux->subject, msg.subject);
 		if(ret == 0)
 			return ERROR_NAME_IN_USE;
 		while(aux->prox != NULL){
 			aux = aux->prox;
-			printf("[Server2] File: %s Name: %s\n", aux->subject, msg.subject);
+			sprintf(buf, "[Server2] File: %s Name: %s\n", aux->subject, msg.subject); addLog(buf);
 			ret = strcmp(aux->subject, msg.subject);
 			if(ret == 0)
 				return ERROR_NAME_IN_USE;
@@ -286,28 +302,28 @@ void retornaCriados(struct data **raiz){
 	//struct mensagemUsuario msg;
 	int count;
 
-	printf("[Server2] Retorna Criados\n");
+	sprintf(buf, "[Server2] Retorna Criados\n"); addLog(buf);
 
 	if(*raiz == NULL){
-		printf("[Server2] Raiz nula!\n");
+		sprintf(buf, "[Server2] Raiz nula!\n"); addLog(buf);
 		count = 0;
 	}else{
 		aux = *raiz;
 		count = 1;
 		while(aux->prox != NULL){
-			printf("[Server2] Raiz não nula!\n");
+			sprintf(buf, "[Server2] Raiz não nula!\n"); addLog(buf);
 			aux = aux->prox;
 			count++;
 		}
 	}
 
-	printf("[Server2] Existe %i arquivos criados\n", count);
+	sprintf(buf, "[Server2] Existe %i arquivos criados\n", count); addLog(buf);
 
 	msg.codigo = CREATED_FILES;
 	if (sendto (sock,(char *)&msg,sizeof msg, 0, (struct sockaddr *)&cli_send, sizeof cli_send) < 0)
 		perror("[Server2] Sending datagram message");	
 
-	printf("[Server2] READ_FILES enviado, enviando quantia\n");
+	sprintf(buf, "[Server2] READ_FILES enviado, enviando quantia\n"); addLog(buf);
 	msg.codigo = count;
 	if (sendto (sock,(char *)&msg,sizeof msg, 0, (struct sockaddr *)&cli_send, sizeof cli_send) < 0)
 		perror("[Server2] Sending datagram message");
@@ -351,7 +367,7 @@ void atualizaArquivo(struct data** raiz, struct mensagemUsuario msg){
 	struct data *novo;
 
 	if(*raiz == NULL){
-		printf("[Server2] Raiz nula, recriando!\n");
+		sprintf(buf, "[Server2] Raiz nula, recriando!\n"); addLog(buf);
 		novo = (struct data *) malloc(sizeof(struct data));
 		if(novo == NULL) exit(0);
 		strcpy(novo->subject, msg.subject);
@@ -367,7 +383,7 @@ void atualizaArquivo(struct data** raiz, struct mensagemUsuario msg){
 					strcpy(aux->message, msg.message);
 					strcpy(aux->user, msg.user);
 					aux->time = msg.time;
-					printf("[Server2] Encontrado, atualizando! %s %s \n", aux->user, msg.user);
+					sprintf(buf, "[Server2] Encontrado, atualizando! %s %s \n", aux->user, msg.user); addLog(buf);
 					return;
 				}
 			}
@@ -388,7 +404,7 @@ void atualizaArquivo(struct data** raiz, struct mensagemUsuario msg){
 		novo->prox = NULL;
 		aux->prox = novo;
 
-		printf("[Server2] Nao existe mais, adicionado no fim!\n");
+		sprintf(buf, "[Server2] Nao existe mais, adicionado no fim!\n"); addLog(buf);
 	}
 }
 
@@ -451,14 +467,14 @@ void recebeDados(){
 		perror("[Server2 Receiver] Getting socket name");
 		exit(1);
 	}
-	printf("[Server2 Receiver] Receiver port #%d\n", ntohs(name.sin_port));
+	sprintf(buf, "[Server2 Receiver] Receiver port #%d\n", ntohs(name.sin_port)); addLog(buf);
 
 	while(1){
 		/* Recebe o request */
 		if (recvfrom(sockReceiver,(char *)&dataShare,sizeof(dataShare),0,(struct sockaddr *)&name, &length) < 0)
 			perror("[Server2 Receiver] Receiving datagram packet");
 
-		printf("[Server1 Receiver] Novo arquivo recebido\n");
+		sprintf(buf, "[Server1 Receiver] Novo arquivo recebido\n"); addLog(buf);
 
 		while(1){
 			pthread_mutex_lock(&lock);
@@ -484,7 +500,7 @@ void enviaAtualizacao(struct mensagemUsuario msg){
 
 	if (sendto (sock,(char *)&data,sizeof data, 0, (struct sockaddr *)&server1, sizeof server1) < 0)
 			perror("[Server2] Sending datagram message");
-	printf("[Server2] Alteracao enviada!\n");
+	sprintf(buf, "[Server2] Alteracao enviada!\n"); addLog(buf);
 }
 
 void sincronizaRecebimento(struct data**raiz, struct mensagemUsuario msg){
@@ -500,4 +516,13 @@ void sincronizaRecebimento(struct data**raiz, struct mensagemUsuario msg){
 			atualizaArquivo(raiz, msg);
 			break;
 	}
+}
+
+void addLog(char*log){
+	FILE *fp;
+	pthread_mutex_lock(&lockLog);
+	fp = fopen(folder, "a+");
+	fprintf(fp, "%s", log);
+	fclose(fp);
+	pthread_mutex_unlock(&lockLog);
 }

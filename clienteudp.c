@@ -192,14 +192,14 @@ int main()
 			}
 			
 			msg.time = (unsigned long)time(NULL);
-			printf("[Client] Atribuindo tempo request! [%lu]\n", msg.time);
+			//printf("[Client] Atribuindo tempo request! [%lu]\n", msg.time);
 
 			/* Envia */
 			if (sendto (sock, (char *)&msg, sizeof (struct mensagem), 0, (struct sockaddr *) &nameServer, sizeof nameServer) < 0)
 				perror("[Client] Sending datagram message");
 
 			if(msg.codigo == 9){
-				printf("[Client] Codigo para auto destruicao\n");
+				//printf("[Client] Codigo para auto destruicao\n");
 				break;
 			}
 
@@ -213,14 +213,14 @@ int main()
 	//}
 	strcpy(aux, "rm -rf ");
 	strcat(aux, folder);
-	printf("[Client] Apagando pasta e terminando! Adeus\n");
+	//printf("[Client] Apagando pasta e terminando! Adeus\n");
 	system(aux);
 	close(sock);
 	exit(0);
 }
 
 void parseResponse(struct mensagem msg){
-	printf("[Client] Codigo recebido: %i\n", msg.codigo);
+	//printf("[Client] Codigo recebido: %i\n", msg.codigo);
 	switch(msg.codigo){
 		case ERROR_EMPTY_DATABASE:
 			printf("\nERRO! Não existe arquivos cadastrados!\n");
@@ -271,7 +271,7 @@ void editFile(struct mensagem msg){
 	strcat(path, "/");
 	strcat(path, msg.subject);
 	strcat(path, ".txt");
-	printf("[Client] File name: %s \n", path);
+	//printf("[Client] File name: %s \n", path);
 	fp = fopen(path, "w");
 	fprintf(fp, "%s", msg.message);
 	fclose(fp);

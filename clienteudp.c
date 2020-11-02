@@ -247,7 +247,8 @@ void parseResponse(struct mensagem msg){
 }
 
 void printArquivos(){
-	int resposta, tam;
+	int resposta;
+	unsigned int tam;
 	struct mensagem msg;
 	if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
 		perror("[Client] receiving datagram packet");

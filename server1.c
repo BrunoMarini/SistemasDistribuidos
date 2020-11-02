@@ -25,9 +25,9 @@
 struct mensagemUsuario {
 	unsigned long time;
 	int codigo;
-	char user[50];
-	char subject[50];
-	char message[500];
+	char user[MAX_DEFAULT_SIZE];
+	char subject[MAX_DEFAULT_SIZE];
+	char message[MAX_MESSAGE_SIZE];
 };
 
 struct mensagemServer {
@@ -37,9 +37,9 @@ struct mensagemServer {
 
 struct data {
 	unsigned long time;
-	char user[50];
-	char subject[50];
-	char message[500];
+	char user[MAX_DEFAULT_SIZE];
+	char subject[MAX_DEFAULT_SIZE];
+	char message[MAX_MESSAGE_SIZE];
 	struct data *prox;
 };
 

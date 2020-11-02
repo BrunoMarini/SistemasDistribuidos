@@ -9,7 +9,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-
+#include <time.h>
 
 #define MAX_MESSAGE_SIZE 500
 #define MAX_DEFAULT_SIZE 50
@@ -34,6 +34,7 @@ pthread_mutex_t lockServer;
 pthread_mutex_t lockLog;
 
 void addLog(char*);
+void getTime(char *);
 
 int main()
 {
@@ -130,7 +131,7 @@ int main()
 		pthread_mutex_unlock(&lockServer);
 
 		/* Exibe info de quem fez o request */
-		//printf("[LoadBalancer] name.sin_family: %i\n", name.sin_family);
+		/*//printf("[LoadBalancer] name.sin_family: %i\n", name.sin_family);
 		sprintf(buf, "[LoadBalancer] name.sin_family: %i\n", name.sin_family);
 		
 		//printf("[LoadBalancer] name.sin_addr: %s\n", inet_ntoa(name.sin_addr));
@@ -144,7 +145,7 @@ int main()
 		//printf("[LoadBalancer] Codigo: %i\n", msg.codigo);
 		sprintf(aux, "[LoadBalancer] name.sin_family: %i\n", name.sin_family);
 		strcat(buf, aux);
-		addLog(buf);
+		addLog(buf);*/
 
 		/* Mandar codigo para matar o server tambem */
 		if(msg.codigo == 9){
@@ -217,9 +218,27 @@ int main()
 
 void addLog(char*log){
 	FILE *fp;
+	char message[1000] = "\0";
+	
+	getTime(message);
+	strcat(message, log);
+
 	pthread_mutex_lock(&lockLog);
 	fp = fopen(folder, "a+");
-	fprintf(fp, "%s", log);
+	fprintf(fp, "%s", message);
 	fclose(fp);
 	pthread_mutex_unlock(&lockLog);
+}
+
+void getTime(char* message){
+	struct tm tm;
+	char buffer[255];
+	char f[255];
+
+	sprintf(buffer,"%lu", time(NULL));
+    
+	memset(&tm, 0, sizeof(struct tm));
+    strptime(buffer, "%s", &tm);
+    strftime(f, sizeof(f), "%d-%b-%Y %H:%M ", &tm);
+	strcpy(message, f);
 }

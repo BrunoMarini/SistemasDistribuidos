@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <time.h>
 
 #define READ_FILE 3
 #define EDIT_FILE 2
@@ -63,6 +64,7 @@ void addLog(char*);
 void loadSaveState(struct data**);
 void saveState(struct data *);
 void compartilhaSave(struct data *);
+void getTime(char*);
 
 int sock;
 void* shmem;
@@ -153,6 +155,9 @@ int main()
 	sprintf(buf, "[Server2] Starting iteration\n"); addLog(buf);
   	while (1)
 	{
+		sprintf(buf, "[Server1] Estou pronto! Aguardando requests!\n");
+		addLog(buf);
+
 		/* Recebe o request */
 		if (recvfrom(sock,(char *)&msgServer,sizeof(msgServer),0,(struct sockaddr *)&name, &length) < 0)
 			perror("[Server2] Receiving datagram packet");
@@ -392,7 +397,10 @@ void atualizaArquivo(struct data** raiz, struct mensagemUsuario msg){
 					strcpy(aux->message, msg.message);
 					strcpy(aux->user, msg.user);
 					aux->time = msg.time;
-					sprintf(buf, "[Server2] Encontrado, atualizando! %s %s \n", aux->user, msg.user); addLog(buf);
+					sprintf(buf, "[Server2] Encontrado, atualizando! %s %s \n", aux->user, msg.user); 
+					addLog(buf);
+					return;
+				}else{
 					return;
 				}
 			}
@@ -530,11 +538,29 @@ void sincronizaRecebimento(struct data**raiz, struct mensagemUsuario msg){
 
 void addLog(char*log){
 	FILE *fp;
+	char message[1000] = "\0";
+
+	getTime(message);
+	strcat(message, log);
+
 	pthread_mutex_lock(&lockLog);
 	fp = fopen(folder, "a+");
-	fprintf(fp, "%s", log);
+	fprintf(fp, "%s", message);
 	fclose(fp);
 	pthread_mutex_unlock(&lockLog);
+}
+
+void getTime(char* message){
+	struct tm tm;
+	char buffer[255];
+	char f[255];
+
+	sprintf(buffer,"%lu", time(NULL));
+    
+	memset(&tm, 0, sizeof(struct tm));
+    strptime(buffer, "%s", &tm);
+    strftime(f, sizeof(f), "%d-%b-%Y %H:%M ", &tm);
+	strcpy(message, f);
 }
 
 void loadSaveState(struct data**raiz){

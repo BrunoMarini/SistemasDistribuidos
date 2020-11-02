@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <netdb.h>
@@ -50,10 +51,13 @@ void printArquivos();
 void parseResponse(struct mensagem);
 void showFile(struct mensagem);
 void printEpoch(char*);
+void showServerErroMessage();
 
 struct sockaddr_in name, nameServer;
 int sock;
 char folder[MAX_DEFAULT_SIZE], nome[MAX_DEFAULT_SIZE];
+struct timeval tv;
+ssize_t ret;
 
 int main()
 {
@@ -68,7 +72,6 @@ int main()
 	system("./s1 &");
 	system("./s2 &");
 	system("./l &");
-	sleep(1);
 	
   	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -77,17 +80,29 @@ int main()
 		perror("[Client] Opening datagram socket");
 		exit(1);
 	}
+
+	/* Define */
+
 	/* Associa */
 	hp = gethostbyname("localhost"); //chama dns
 	if (hp==0) {
 		fprintf(stderr, "[Client] Localhost unknown host ");
       	exit(2);
   	}
-  	
+
 	/* Já pre define o servidor de acesso */
   	bcopy ((char *)hp->h_addr, (char *)&nameServer.sin_addr, hp->h_length);
 	nameServer.sin_family = AF_INET;
 	nameServer.sin_port = htons(2020);
+   
+   /* Define timeout pra poder lidar com o caso do load balancer down */
+	tv.tv_sec = 0;
+	tv.tv_usec = 200000;
+    if (setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(tv)) < 0)
+        perror("setsockopt failed\n");
+
+    if (setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(tv)) < 0)
+        perror("setsockopt failed\n");
 
 	/* Cria o folder onde os arquivos serão armazenados */
 	strcpy(folder, "user");
@@ -206,9 +221,15 @@ int main()
 			/* Recebe a resposta */
 			int resposta;
 			unsigned int tam;
-			if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
-				perror("[Client] receiving datagram packet");
-
+			msg.codigo = 123456789;
+			ret = recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam);
+			//printf("%td \n", ret);
+			if (ret == -1 && msg.codigo == 123456789){
+				showServerErroMessage();
+				continue;
+				//perror("[Client] receiving datagram packet");
+			}
+			
 			parseResponse(msg);
 		}
 	//}
@@ -251,17 +272,28 @@ void printArquivos(){
 	int resposta;
 	unsigned int tam;
 	struct mensagem msg;
-	if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
-		perror("[Client] receiving datagram packet");
+
+	msg.codigo = 123456789;
+	ret = recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam);
+	if (ret == -1 && msg.codigo == 123456789){
+		showServerErroMessage();
+		return;
+		//perror("[Client] receiving datagram packet");
+	}
+	
 	resposta = msg.codigo;
 	if(resposta == 0)
 		printf("\nNenhum arquivo criado!\n");
 	else
 		printf("\nArquivos criado:\n");
 	for(int i = 0; i < resposta; i++){
-		if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
-			perror("[Client] receiving datagram packet");
-
+		msg.codigo = 123456789;
+		ret = recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam);
+		if(ret == -1 && msg.codigo == 123456789){
+			showServerErroMessage();
+			continue;
+			//perror("[Client] receiving datagram packet");
+		}	
 		printf("%i. %s\n", i + 1, msg.subject);
 	}
 }
@@ -326,4 +358,10 @@ void printEpoch(char* time){
     puts(buf);
     
 	return;
+}
+
+void showServerErroMessage(){
+	printf("\nERRO! Servidor Inacessivel!\n");
+	printf("Cheque sua conexao, caso o problema persista contate o administrador do servidor!\n");
+	sleep(1);
 }

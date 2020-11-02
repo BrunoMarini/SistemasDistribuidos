@@ -49,7 +49,6 @@ struct dataShare {
 };
 
 int ret;
-int paiPid;
 
 int inserirNoFim(struct data **, struct mensagemUsuario);
 void deletaArquivo(struct data**, char *);
@@ -61,6 +60,9 @@ void recebeDados();
 void enviaAtualizacao(struct mensagemUsuario);
 void sincronizaRecebimento(struct data**, struct mensagemUsuario);
 void addLog(char*);
+void loadSaveState(struct data**);
+void saveState(struct data *);
+void compartilhaSave(struct data *);
 
 int sock;
 void* shmem;
@@ -92,6 +94,8 @@ int main()
     	mkdir(folder, 0700);
 	}
 	strcat(folder, "log.txt");
+
+	loadSaveState(&raiz);
 
   	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -132,7 +136,6 @@ int main()
 	server1.sin_port = htons(9876); 
 
 	int cont=0;
-  	paiPid = getpid();
   
   	dataShare.codigo = -1;
 	shmem = create_shared_memory(sizeof(struct dataShare));
@@ -142,6 +145,9 @@ int main()
 	if(fork() == 0){
 		recebeDados();
 	}
+
+	/* Caso exista backup, ele ja esta carregado em memoria agora sera compartilhada com os outros servers */
+	compartilhaSave(raiz);
 
   	/* Le */
 	sprintf(buf, "[Server2] Starting iteration\n"); addLog(buf);
@@ -199,13 +205,13 @@ int main()
 			sprintf(buf, "[Server2] Criar arquivo (%s)\n", msg.subject); addLog(buf);
 			msg.codigo = inserirNoFim(&raiz, msg);
 			enviaAtualizacao(auxUsuario);
+			saveState(raiz);
 			break;
 		/* EDITAR */
 		case 3:
 			auxUsuario = msg;
 			sprintf(buf, "[Server2] Editar arquivo (%s)\n", msg.subject); addLog(buf);
 			msg = encontrarArquivo(raiz, msg, EDIT_FILE);
-			enviaAtualizacao(auxUsuario);
 			break;
 		/* EXCLUIR */
 		case 4:
@@ -213,6 +219,7 @@ int main()
 			sprintf(buf, "[Server2] Excluir arquivo\n"); addLog(buf);
 			deletaArquivo(&raiz, msg.subject);
 			enviaAtualizacao(auxUsuario);
+			saveState(raiz);
 			break;
 		/* VER CRIADOS */
 		case 5:
@@ -224,6 +231,7 @@ int main()
 			sprintf(buf, "[Server2] Editar arquivo\n"); addLog(buf);
 			atualizaArquivo(&raiz, msg);
 			enviaAtualizacao(auxUsuario);
+			saveState(raiz);
 			continue;
 		default:
 			sprintf(buf, "[Server2] Opcao nao encontrada\n"); addLog(buf);
@@ -280,6 +288,7 @@ int inserirNoFim(struct data **raiz, struct mensagemUsuario msg){
     novo = (struct data *) malloc(sizeof(struct data));
     if(novo == NULL) exit(0);
     strcpy(novo->subject, msg.subject);
+	strcpy(novo->message, msg.message);
 	strcpy(novo->user, msg.user);
 	novo->time = msg.time;
     novo->prox = NULL;
@@ -474,7 +483,7 @@ void recebeDados(){
 		if (recvfrom(sockReceiver,(char *)&dataShare,sizeof(dataShare),0,(struct sockaddr *)&name, &length) < 0)
 			perror("[Server2 Receiver] Receiving datagram packet");
 
-		sprintf(buf, "[Server1 Receiver] Novo arquivo recebido\n"); addLog(buf);
+		sprintf(buf, "[Server2 Receiver] Novo arquivo recebido\n"); addLog(buf);
 
 		while(1){
 			pthread_mutex_lock(&lock);
@@ -516,6 +525,7 @@ void sincronizaRecebimento(struct data**raiz, struct mensagemUsuario msg){
 			atualizaArquivo(raiz, msg);
 			break;
 	}
+	saveState(*raiz);
 }
 
 void addLog(char*log){
@@ -525,4 +535,56 @@ void addLog(char*log){
 	fprintf(fp, "%s", log);
 	fclose(fp);
 	pthread_mutex_unlock(&lockLog);
+}
+
+void loadSaveState(struct data**raiz){
+	FILE *fp;
+	struct data *aux, *novo;
+	struct mensagemUsuario input;
+	fp = fopen("Server2Logs/data.dat", "r");
+	if (fp == NULL) 
+		return;
+
+	while(fread(&input, sizeof(struct mensagemUsuario), 1, fp)){
+		atualizaArquivo(raiz, input);
+	} 
+
+	sprintf(buf, "[Server2] Backup carregado com sucesso!\n");
+	addLog(buf);
+
+	fclose(fp);
+}
+
+void saveState(struct data *raiz){
+	FILE *fp;
+	struct mensagemUsuario aux;
+	fp = fopen("Server2Logs/data.dat", "w");
+	while(raiz != NULL){
+		strcpy(aux.subject, raiz->subject);
+		strcpy(aux.message, raiz->message);
+		strcpy(aux.user, raiz->user);
+		aux.time = raiz->time;
+		aux.codigo = 6;
+
+		fwrite(&aux, sizeof(struct mensagemUsuario), 1, fp);
+		raiz = raiz->prox;
+	}
+
+	sprintf(buf, "[Server2] Save state completo!\n");
+	addLog(buf);
+	fclose(fp);
+}
+
+void compartilhaSave(struct data *raiz){
+	struct mensagemUsuario msg;
+	while(raiz != NULL){
+		strcpy(msg.user, raiz->user);
+		strcpy(msg.subject, raiz->subject);
+		strcpy(msg.message, raiz->message);
+		msg.time = raiz->time;
+		msg.codigo = 6;
+		
+		enviaAtualizacao(msg);
+		raiz = raiz->prox;
+	}
 }

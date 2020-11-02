@@ -68,7 +68,7 @@ int main()
 	system("./s1 &");
 	system("./s2 &");
 	system("./l &");
-	sleep(2);
+	sleep(1);
 	
   	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -204,7 +204,8 @@ int main()
 			}
 
 			/* Recebe a resposta */
-			int resposta, tam;
+			int resposta;
+			unsigned int tam;
 			if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
 				perror("[Client] receiving datagram packet");
 

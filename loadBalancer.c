@@ -1,3 +1,34 @@
+/*
+ * Bruno Guilherme Spirlandeli Marini    - 17037607
+ * Marcos Aurelio Tavares de Sousa Filho - 17042284 
+ *
+ * OPCIONAIS FUNCIONANDO: 
+ * CONSISTÊNCIA, INTERFACE, BALANCEAMENTO DE CARGA, CHECKPOINT E LOG, 
+ * DIRETÓRIO, FALHAS NO DIRETÓRIO, TOLERÂNCIA A FALHAS 
+ *
+ * DESCRICAO:
+ * Atravez de um processo cliente (clienteudp.c) e possivel fazer requests 
+ * para criar/editar/excluir/ler arquivos do servidor, o request será
+ * realizado ao balanceador de carga (LoadBalancer.c) que por sua vez escolhera
+ * um servidor para direcionar o pedido. Os servidores possuem mecanismos
+ * internos para manter a consistencia dos dados entre eles, ou seja, um request.
+ * feito para o servidor A será compartilhada com o servidor B de forma 
+ * transparente para o usuario. Os servidores possuem mecanismos de backup, 
+ * armazenando localmente os arquivos e podendo recarregalos caso aconteça
+ * algum problema. O usuário por sua vez será informado quando nao for possivel
+ * enviar/receber um dado. Para facilitar o debug logs sao gerados pelos 
+ * servidores e salvos em um arquivo log.txt contendo a data e a informacao.
+ *
+ * DADOS:
+ * Um arquivo contem as seguintes informacoes:
+ * time: Aramazena a hora que o arquivo foi alterado pela ultima vez
+ * user: Armazena o nome do ultimo usuario que alterou o arquivo (MAX: 50)
+ * subject: Armazena o nome do arquivo (MAX 50)(Nao pode ser alterado)
+ * 
+ *
+ * Valor do Projeto: 11 pontos
+ */
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -200,6 +231,12 @@ int main()
 		ret = sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&serverToSend, sizeof name);
 		if (ret == -1){
 			sprintf(buf, "[LoadBalancer] Erro, Servidor [%i] inativo!\n", serverNum);
+			addLog(buf);
+
+			if(serverNum == 1)
+				system("./s1 &");
+			else
+				system("./s2 &");
 			//perror("[LoadBalancer] Sending datagram message");
 		}
 		/* REMOVERRRRRR */

@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -27,8 +28,10 @@ struct mensagemServer {
 	struct sockaddr_in client;
 };
 
-int ret;
+int retFork;
 char folder[MAX_DEFAULT_SIZE];
+struct timeval tv;
+ssize_t ret;
 
 pthread_mutex_t lockServer; 
 pthread_mutex_t lockLog;
@@ -69,6 +72,13 @@ int main()
 	name.sin_family = AF_INET;
 	name.sin_addr.s_addr = INADDR_ANY;
 	name.sin_port = htons(2020);
+
+	/* Define timeout pra poder lidar com o caso do load balancer down */
+	tv.tv_sec = 0;
+	tv.tv_usec = 200000;
+	
+    if (setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(tv)) < 0)
+        perror("setsockopt failed\n");
 
 	if (bind(sock,(struct sockaddr *)&name, sizeof name ) < 0) {
 		perror("[LoadBalancer] Binding datagram socket");
@@ -161,9 +171,9 @@ int main()
 			break;
 		}
 
-		ret = fork();
+		retFork = fork();
 		//Se for processo pai volta e aguarda as proximas requisicoes
-		if(ret > 0)
+		if(retFork > 0)
 			continue;
 		
 		//printf("[LoadBalancer] Sou filho novo [%i]\n", getpid());
@@ -187,14 +197,16 @@ int main()
 		addLog(buf);
 
 		/* Envia o dado para o server */
-		if (sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&serverToSend, sizeof name) < 0)
-			perror("[LoadBalancer] Sending datagram message");
-
+		ret = sendto (sock,(char *)&msgServer,sizeof msgServer, 0, (struct sockaddr *)&serverToSend, sizeof name);
+		if (ret == -1){
+			sprintf(buf, "[LoadBalancer] Erro, Servidor [%i] inativo!\n", serverNum);
+			//perror("[LoadBalancer] Sending datagram message");
+		}
 		/* REMOVERRRRRR */
 		exit(0);
 	}
 
-	if(ret != 0){
+	if(retFork != 0){
 		//printf("[Server %i] Acabou, fiz tudo que eu podia =( \n", getpid());
 		sprintf(buf, "[Server %i] Acabou, fiz tudo que eu podia =( \n", getpid());
 		addLog(buf);

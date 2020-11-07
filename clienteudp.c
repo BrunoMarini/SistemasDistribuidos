@@ -1,5 +1,37 @@
+/*
+ * Bruno Guilherme Spirlandeli Marini    - 17037607
+ * Marcos Aurelio Tavares de Sousa Filho - 17042284 
+ *
+ * OPCIONAIS FUNCIONANDO: 
+ * CONSISTÊNCIA, INTERFACE, BALANCEAMENTO DE CARGA, CHECKPOINT E LOG, 
+ * DIRETÓRIO, FALHAS NO DIRETÓRIO, TOLERÂNCIA A FALHAS 
+ *
+ * DESCRICAO:
+ * Atravez de um processo cliente (clienteudp.c) e possivel fazer requests 
+ * para criar/editar/excluir/ler arquivos do servidor, o request será
+ * realizado ao balanceador de carga (LoadBalancer.c) que por sua vez escolhera
+ * um servidor para direcionar o pedido. Os servidores possuem mecanismos
+ * internos para manter a consistencia dos dados entre eles, ou seja, um request.
+ * feito para o servidor A será compartilhada com o servidor B de forma 
+ * transparente para o usuario. Os servidores possuem mecanismos de backup, 
+ * armazenando localmente os arquivos e podendo recarregalos caso aconteça
+ * algum problema. O usuário por sua vez será informado quando nao for possivel
+ * enviar/receber um dado. Para facilitar o debug logs sao gerados pelos 
+ * servidores e salvos em um arquivo log.txt contendo a data e a informacao.
+ *
+ * DADOS:
+ * Um arquivo contem as seguintes informacoes:
+ * time: Aramazena a hora que o arquivo foi alterado pela ultima vez
+ * user: Armazena o nome do ultimo usuario que alterou o arquivo (MAX: 50)
+ * subject: Armazena o nome do arquivo (MAX 50)(Nao pode ser alterado)
+ * message: Armazena a mensagem (MAX 500)
+ *
+ * Valor do Projeto: 11 pontos
+ */
+
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <netdb.h>
@@ -9,6 +41,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <time.h>
 
 #define MAX_MESSAGE_SIZE 500
 #define MAX_DEFAULT_SIZE 50
@@ -26,7 +59,7 @@ struct conexao {
 };
 
 struct mensagem {
-	int time;
+	unsigned long time;
 	int codigo;
 	char user[MAX_DEFAULT_SIZE];
 	char subject[MAX_DEFAULT_SIZE];
@@ -48,10 +81,14 @@ void editFile(struct mensagem);
 void printArquivos();
 void parseResponse(struct mensagem);
 void showFile(struct mensagem);
+void printEpoch(char*);
+void showServerErroMessage();
 
 struct sockaddr_in name, nameServer;
 int sock;
 char folder[MAX_DEFAULT_SIZE], nome[MAX_DEFAULT_SIZE];
+struct timeval tv;
+ssize_t ret;
 
 int main()
 {
@@ -63,9 +100,10 @@ int main()
 	struct conexao con;
 	struct stat st = {0};
 
-	system("./s &");
+	system("./s1 &");
+	system("./s2 &");
 	system("./l &");
-	sleep(2);
+	
   	/* Cria o socket de comunicacao */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if(sock<0) {
@@ -73,17 +111,29 @@ int main()
 		perror("[Client] Opening datagram socket");
 		exit(1);
 	}
+
+	/* Define */
+
 	/* Associa */
 	hp = gethostbyname("localhost"); //chama dns
 	if (hp==0) {
 		fprintf(stderr, "[Client] Localhost unknown host ");
       	exit(2);
   	}
-  	
+
 	/* Já pre define o servidor de acesso */
   	bcopy ((char *)hp->h_addr, (char *)&nameServer.sin_addr, hp->h_length);
 	nameServer.sin_family = AF_INET;
 	nameServer.sin_port = htons(2020);
+   
+   /* Define timeout pra poder lidar com o caso do load balancer down */
+	tv.tv_sec = 0;
+	tv.tv_usec = 200000;
+    if (setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(tv)) < 0)
+        perror("setsockopt failed\n");
+
+    if (setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(tv)) < 0)
+        perror("setsockopt failed\n");
 
 	/* Cria o folder onde os arquivos serão armazenados */
 	strcpy(folder, "user");
@@ -164,6 +214,7 @@ int main()
 				case 2:
 					printf("Insira o nome do arquivo que deseja criar: ");
 					scanf("%s", msg.subject);
+					strcpy(msg.message, "\0");
 					break;
 				case 3:
 					printf("Insira o nome do arquivo que deseja editar: ");
@@ -185,34 +236,44 @@ int main()
 				default:
 					continue;
 			}
+			
+			msg.time = (unsigned long)time(NULL);
+			//printf("[Client] Atribuindo tempo request! [%lu]\n", msg.time);
 
 			/* Envia */
 			if (sendto (sock, (char *)&msg, sizeof (struct mensagem), 0, (struct sockaddr *) &nameServer, sizeof nameServer) < 0)
 				perror("[Client] Sending datagram message");
 
 			if(msg.codigo == 9){
-				printf("[Client] Codigo para auto destruicao\n");
+				//printf("[Client] Codigo para auto destruicao\n");
 				break;
 			}
 
 			/* Recebe a resposta */
-			int resposta, tam;
-			if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
-				perror("[Client] receiving datagram packet");
-
+			int resposta;
+			unsigned int tam;
+			msg.codigo = 123456789;
+			ret = recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam);
+			//printf("%td \n", ret);
+			if (ret == -1 && msg.codigo == 123456789){
+				showServerErroMessage();
+				continue;
+				//perror("[Client] receiving datagram packet");
+			}
+			
 			parseResponse(msg);
 		}
 	//}
 	strcpy(aux, "rm -rf ");
 	strcat(aux, folder);
-	printf("[Client] Apagando pasta e terminando! Adeus\n");
+	//printf("[Client] Apagando pasta e terminando! Adeus\n");
 	system(aux);
 	close(sock);
 	exit(0);
 }
 
 void parseResponse(struct mensagem msg){
-	printf("[Client] Codigo recebido: %i\n", msg.codigo);
+	//printf("[Client] Codigo recebido: %i\n", msg.codigo);
 	switch(msg.codigo){
 		case ERROR_EMPTY_DATABASE:
 			printf("\nERRO! Não existe arquivos cadastrados!\n");
@@ -239,19 +300,31 @@ void parseResponse(struct mensagem msg){
 }
 
 void printArquivos(){
-	int resposta, tam;
+	int resposta;
+	unsigned int tam;
 	struct mensagem msg;
-	if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
-		perror("[Client] receiving datagram packet");
+
+	msg.codigo = 123456789;
+	ret = recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam);
+	if (ret == -1 && msg.codigo == 123456789){
+		showServerErroMessage();
+		return;
+		//perror("[Client] receiving datagram packet");
+	}
+	
 	resposta = msg.codigo;
 	if(resposta == 0)
 		printf("\nNenhum arquivo criado!\n");
 	else
 		printf("\nArquivos criado:\n");
 	for(int i = 0; i < resposta; i++){
-		if (recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam)<0)
-			perror("[Client] receiving datagram packet");
-
+		msg.codigo = 123456789;
+		ret = recvfrom(sock,(char *)&msg,sizeof(struct mensagem),0,(struct sockaddr *)&name, &tam);
+		if(ret == -1 && msg.codigo == 123456789){
+			showServerErroMessage();
+			continue;
+			//perror("[Client] receiving datagram packet");
+		}	
 		printf("%i. %s\n", i + 1, msg.subject);
 	}
 }
@@ -263,7 +336,7 @@ void editFile(struct mensagem msg){
 	strcat(path, "/");
 	strcat(path, msg.subject);
 	strcat(path, ".txt");
-	printf("[Client] File name: %s \n", path);
+	//printf("[Client] File name: %s \n", path);
 	fp = fopen(path, "w");
 	fprintf(fp, "%s", msg.message);
 	fclose(fp);
@@ -294,8 +367,32 @@ void editFile(struct mensagem msg){
 }
 
 void showFile(struct mensagem msg){
+	char buffer[30];
+	sprintf(buffer,"%lu", msg.time);
+
 	printf("\nExibindo arquivo: %s \n", msg.subject);
-	printf("\n%s\n", msg.message);
+	if(strlen(msg.message) == 0)
+		printf("\n** Mensagem vazia **\n");
+	else
+		printf("\n%s\n", msg.message);
 	printf("\nCriado por: %s \n", msg.user);
-	printf("Em: %i\n", msg.time);
+	printEpoch(buffer);	
+}
+
+void printEpoch(char* time){
+	struct tm tm;
+    char buf[255];
+	
+    memset(&tm, 0, sizeof(struct tm));
+    strptime(time, "%s", &tm);
+    strftime(buf, sizeof(buf), "Em: %d %b %Y as %H:%M (GMT 00:00)", &tm);
+    puts(buf);
+    
+	return;
+}
+
+void showServerErroMessage(){
+	printf("\nERRO! Servidor Inacessivel!\n");
+	printf("Cheque sua conexao, caso o problema persista contate o administrador do servidor!\n");
+	sleep(1);
 }
